@@ -1,0 +1,4 @@
+uuid: "272d299f-d948-413c-916c-5d42645b587d"
+root_path: "/Users/kamalbuqaileh/workspace/graph_ops/graphops_interface"
+language: "ruby"
+excluded_paths: ["db", "vendor", "tmp", "test", "tests", "spec", "specs", "config"]

@@ -1,0 +1,28 @@
+[project]
+name = "graphops_interface"
+version = "0.1.0"
+description = "Backend communication for Graph Ops agents: setup, encryption, CLI, and output to nodes.json. Grammar plugins (e.g. ruby_grammars) plug in for language-specific scanning."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "cryptography",
+]
+
+[project.optional-dependencies]
+ruby = [
+    "ruby_base",
+]
+dev = [
+    "typer>=0.12.0",
+]
+
+[project.scripts]
+graphops = "graphops_interface.cli:main"
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["graphops_interface"]
+include-package-data = true
