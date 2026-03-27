@@ -38,6 +38,7 @@ def parse_args() -> argparse.Namespace:
     init_parser = sub.add_parser("init", help="Initialize project: set API key and root path (interactive or via arguments).")
     init_parser.add_argument("--api-key", "-k", dest="api_key", help="Agent API key (from the agent show page).")
     init_parser.add_argument("--root-path", "-r", dest="root_path", help="Root path of the project to scan.")
+    init_parser.add_argument("--dev", action="store_true", help="Use localhost backend and persist it to graphops.yml.")
     init_parser.add_argument(
         "extra",
         nargs="*",

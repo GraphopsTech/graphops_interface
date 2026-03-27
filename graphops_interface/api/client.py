@@ -9,6 +9,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from graphops_interface.constants import DEFAULT_GRAPHOPS_API_BASE_URL
+
 
 class ExternalAPIClient:
     """Lightweight HTTP client for making requests to external services."""
@@ -20,7 +22,7 @@ class ExternalAPIClient:
                 "AGENT_INTERFACE_BACKEND_URL",
                 os.environ.get(
                     "GRAPH_OPS_AGENT_BACKEND_URL",
-                    os.environ.get("RUBY_AGENT_BACKEND_URL", "http://localhost:3000/api/v1"),
+                    os.environ.get("RUBY_AGENT_BACKEND_URL", DEFAULT_GRAPHOPS_API_BASE_URL),
                 ),
             ),
         )

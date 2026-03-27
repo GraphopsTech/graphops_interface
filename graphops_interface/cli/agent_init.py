@@ -8,9 +8,13 @@ from pathlib import Path
 from typing import Optional
 
 from graphops_interface.api.client import ExternalAPIClient
+from graphops_interface.constants import (
+    DEVELOPMENT_GRAPHOPS_BACKEND_ORIGIN,
+    PRODUCTION_GRAPHOPS_BACKEND_ORIGIN,
+)
 
 
-def run_init(api_key: Optional[str] = None, root_path: Optional[str] = None) -> None:
+def run_init(api_key: Optional[str] = None, root_path: Optional[str] = None, dev: bool = False) -> None:
     """
     Run graphops init: first check env vars GRAPHOPS_API_KEY and GRAPHOPS_ROOT_PATH.
     If both are set, use them and proceed. Otherwise use provided arguments, then prompt for any missing value.
@@ -47,7 +51,12 @@ def run_init(api_key: Optional[str] = None, root_path: Optional[str] = None) -> 
         return
     root_path = str(root_path_resolved)
 
-    print("\nSending init request to backend...")
+    backend_origin = DEVELOPMENT_GRAPHOPS_BACKEND_ORIGIN if dev else PRODUCTION_GRAPHOPS_BACKEND_ORIGIN
+    os.environ["GRAPHOPS_INTERFACE_BACKEND_URL"] = f"{backend_origin}/api/v1"
+    mode_label = "development (localhost)" if dev else "production"
+    print(f"\nBackend mode: {mode_label}")
+    print(f"Backend URL:  {backend_origin}")
+    print("Sending init request to backend...")
     try:
         resp = ExternalAPIClient().post(
             "/agents/init",
@@ -80,7 +89,7 @@ def run_init(api_key: Optional[str] = None, root_path: Optional[str] = None) -> 
         print("✗ Init failed: backend did not return uuid.")
         return
 
-    _write_graphops_yml(root_path=root_path, uuid=uuid_val, language=language)
+    _write_graphops_yml(root_path=root_path, uuid=uuid_val, language=language, backend_url=backend_origin)
     _write_env_file(root_path=root_path, api_key=api_key)
 
     print("✓ Init complete")
@@ -90,8 +99,8 @@ def run_init(api_key: Optional[str] = None, root_path: Optional[str] = None) -> 
     print("-" * 60)
 
 
-def _write_graphops_yml(root_path: str, uuid: str, language: str) -> None:
-    """Create graphops.yml in root_path with uuid, root_path, language, excluded_paths."""
+def _write_graphops_yml(root_path: str, uuid: str, language: str, backend_url: str) -> None:
+    """Create graphops.yml in root_path with uuid, root_path, language, excluded_paths, backend_url."""
     path = Path(root_path).expanduser().resolve() / "graphops.yml"
     # Default excluded_paths: db (migrations), vendor, tmp so migrations/framework noise stay out of the graph
     default_excluded = '["db", "vendor", "tmp", "test", "tests", "spec", "specs", "config"]'
@@ -99,6 +108,7 @@ def _write_graphops_yml(root_path: str, uuid: str, language: str) -> None:
 root_path: "{root_path}"
 language: "{language}"
 excluded_paths: {default_excluded}
+backend_url: "{backend_url}"
 """
     try:
         path.write_text(content.strip() + "\n", encoding="utf-8")

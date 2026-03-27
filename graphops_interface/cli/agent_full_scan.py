@@ -177,7 +177,7 @@ def run_full_scan(
     if effective_backend:
         os.environ["GRAPHOPS_INTERFACE_BACKEND_URL"] = f"{str(effective_backend).rstrip('/')}/api/v1"
         if not backend_url:
-            print(f"   Backend: {effective_backend} (from config/env)")
+            print(f"   Backend: {effective_backend}")
 
     print(f"📦 graphops full_scan (ruby_base)")
     print(f"   Root:    {scan_path}")

@@ -35,11 +35,11 @@ LANGUAGE_EXTENSIONS: Dict[str, List[str]] = {
 
 
 def _load_graphops_yml(path: Path) -> Dict[str, Any]:
-    """Parse graphops.yml (uuid, root_path, language, excluded_paths). Minimal YAML-style parser."""
+    """Parse graphops.yml (uuid, root_path, language, excluded_paths, backend_url). Minimal YAML-style parser."""
     if not path.exists():
         raise FileNotFoundError(f"graphops.yml not found: {path}")
     text = path.read_text(encoding="utf-8")
-    out: Dict[str, Any] = {"uuid": "", "root_path": "", "language": "", "excluded_paths": []}
+    out: Dict[str, Any] = {"uuid": "", "root_path": "", "language": "", "excluded_paths": [], "backend_url": ""}
     for line in text.splitlines():
         line = line.strip()
         if not line or line.startswith("#"):
@@ -66,6 +66,8 @@ def _load_graphops_yml(path: Path) -> Dict[str, Any]:
                     out["excluded_paths"] = json.loads(value)
                 except json.JSONDecodeError:
                     out["excluded_paths"] = []
+        elif key == "backend_url":
+            out["backend_url"] = value.strip('"').strip("'")
     return out
 
 
@@ -343,6 +345,7 @@ def run_scan(
     root_path = (yml.get("root_path") or "").strip()
     lang = (language or yml.get("language") or "").strip()
     excluded_paths = list(yml.get("excluded_paths") or [])
+    backend_url = (yml.get("backend_url") or "").strip()
 
     if not uuid_val:
         raise SystemExit("graphops.yml is missing 'uuid'. Re-run `graphops init`.")
@@ -350,6 +353,9 @@ def run_scan(
         raise SystemExit("graphops.yml is missing 'root_path'. Re-run `graphops init`.")
     if not lang:
         raise SystemExit("graphops.yml is missing 'language'. Re-run `graphops init` or set --language.")
+
+    if backend_url:
+        os.environ["GRAPHOPS_INTERFACE_BACKEND_URL"] = f"{backend_url.rstrip('/')}/api/v1"
 
     scan_path = Path(root_path).expanduser().resolve()
     if not scan_path.exists() or not scan_path.is_dir():

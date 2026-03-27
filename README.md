@@ -4,12 +4,25 @@ Backend communication for Graph Ops: init, encryption, API client, and output to
 
 ## Install
 
-```bash
-pip install graphops_interface
-# and a grammar, e.g.:
-pip install ruby_grammars
+**`graphops_interface` is not on the public PyPI index** — it is served from your **Graph Ops** app’s private PEP 503 API (same host as your Rails API, e.g. `https://api.graphops.tech/pypi/simple/`). You must tell pip about that index:
 
-# CLI entrypoint
+```bash
+pip install graphops_interface \
+  --extra-index-url "https://YOUR_TOKEN:@api.graphops.tech/pypi/simple/" \
+  --trusted-host api.graphops.tech
+```
+
+Or set `PIP_EXTRA_INDEX_URL` / `PIP_TRUSTED_HOST`, or configure `[global] extra-index-url` in `pip.conf` (see `ruby_base` README for examples).
+
+Optional grammar packages (if published separately):
+
+```bash
+pip install ruby_grammars
+```
+
+CLI:
+
+```bash
 graphops --help
 ```
 
@@ -64,4 +77,11 @@ ruby = "ruby_grammars:get_analyzer"
 ## Config and env
 
 - Config: `~/.graphops_interface/config.json`
-- Backend URL: `GRAPHOPS_INTERFACE_BACKEND_URL`, or `AGENT_INTERFACE_BACKEND_URL` / `GRAPH_OPS_AGENT_BACKEND_URL` / `RUBY_AGENT_BACKEND_URL` (fallback), default `http://localhost:3000/api/v1`
+- Backend URL: `GRAPHOPS_INTERFACE_BACKEND_URL`, or `AGENT_INTERFACE_BACKEND_URL` / `GRAPH_OPS_AGENT_BACKEND_URL` / `RUBY_AGENT_BACKEND_URL` (fallback), default `https://api.graphops.tech/api/v1`.
+- `graphops init --dev` writes `backend_url: "http://localhost:3000"` to `graphops.yml` (local mode).
+- `graphops init` (without `--dev`) writes `backend_url: "https://api.graphops.tech"` (production mode).
+- `scan`, `scan2`, and `full_scan` read `backend_url` from `graphops.yml` and route requests there unless explicitly overridden by env/flags.
+- Large upload tuning:
+  - `GRAPHOPS_UPLOAD_TIMEOUT_SECONDS` (default: `300`)
+  - `GRAPHOPS_UPLOAD_BATCH_FILES_PER_REQUEST` (default: `10`)
+  These apply to protobuf batch uploads in `scan2` / `full_scan`.

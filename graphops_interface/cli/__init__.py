@@ -34,7 +34,11 @@ def main() -> None:
             no_upload=getattr(args, "no_upload", False),
         )
     elif args.command == "init":
-        run_init(api_key=getattr(args, "api_key", None), root_path=getattr(args, "root_path", None))
+        run_init(
+            api_key=getattr(args, "api_key", None),
+            root_path=getattr(args, "root_path", None),
+            dev=getattr(args, "dev", False),
+        )
     else:
         print("Use: graphops scan | graphops full_scan | graphops scan2 | graphops init")
         print("Run 'graphops --help' for details.")

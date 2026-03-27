@@ -10,10 +10,12 @@ from typing import Any, Dict, List, Optional, Set
 
 try:
     from graphops_interface.api.client import ExternalAPIClient
+    from graphops_interface.constants import DEFAULT_GRAPHOPS_BACKEND_ORIGIN
     from graphops_interface.utils.git import git_status, is_git_repo, GitStatus
     from ruby_base.proto import ProtobufNodeBatchWriter, list_batch_files, read_all_batches
 except ImportError:
     ExternalAPIClient = None  # type: ignore
+    DEFAULT_GRAPHOPS_BACKEND_ORIGIN = "https://api.graphops.tech"  # type: ignore
     git_status = None  # type: ignore
     is_git_repo = None  # type: ignore
     GitStatus = None  # type: ignore
@@ -84,7 +86,8 @@ def _resolve_backend_url(
 ) -> Optional[str]:
     """
     Resolve backend URL for rule fetching. RuleLoader expects base URL (no /api/v1).
-    Priority: explicit arg > graphops.yml backend_url > env GRAPHOPS_INTERFACE_BACKEND_URL.
+    Priority: explicit arg > graphops.yml backend_url > env GRAPHOPS_INTERFACE_BACKEND_URL
+    > default production (api.graphops.tech).
     """
     if explicit and str(explicit).strip():
         url = str(explicit).rstrip("/")
@@ -95,7 +98,7 @@ def _resolve_backend_url(
         else:
             url = (os.environ.get("GRAPHOPS_INTERFACE_BACKEND_URL") or "").strip().rstrip("/")
     if not url:
-        return None
+        url = DEFAULT_GRAPHOPS_BACKEND_ORIGIN
     # RuleLoader appends /api/v1/rules/... so strip /api/v1 if present
     if url.endswith("/api/v1"):
         url = url[: -len("/api/v1")].rstrip("/")
@@ -280,11 +283,16 @@ def _upload_batch_files(
         print("⚠️  No protobuf batches found to upload.")
         return False
 
-    multipart_files = [
-        ("batch_files[]", batch_file, "application/gzip")
-        for batch_file in all_files
-    ]
-    client = ExternalAPIClient()
+    multipart_files = [("batch_files[]", batch_file, "application/gzip") for batch_file in all_files]
+    try:
+        upload_timeout = float(os.environ.get("GRAPHOPS_UPLOAD_TIMEOUT_SECONDS", "300"))
+    except ValueError:
+        upload_timeout = 300.0
+    try:
+        max_files_per_request = max(1, int(os.environ.get("GRAPHOPS_UPLOAD_BATCH_FILES_PER_REQUEST", "10")))
+    except ValueError:
+        max_files_per_request = 10
+    client = ExternalAPIClient(timeout=upload_timeout)
     # Rails may treat `format` specially depending on parser/route resolution.
     # Send it in both query string and multipart fields for compatibility.
     fields = {
@@ -293,12 +301,26 @@ def _upload_batch_files(
         "action": action,
     }
     try:
-        client.post_multipart(
-            f"/agents/{external_uuid}/raw_data/create.protobuf-gzip",
-            fields=fields,
-            files=multipart_files,
-            headers={"X-API-Key": api_key},
-        )
+        total_chunks = (len(multipart_files) + max_files_per_request - 1) // max_files_per_request
+        uploaded = 0
+        for chunk_idx in range(total_chunks):
+            start = chunk_idx * max_files_per_request
+            end = start + max_files_per_request
+            chunk_files = multipart_files[start:end]
+            chunk_fields = dict(fields)
+            chunk_fields["chunk_index"] = str(chunk_idx)
+            chunk_fields["total_chunks"] = str(total_chunks)
+            client.post_multipart(
+                f"/agents/{external_uuid}/raw_data/create.protobuf-gzip",
+                fields=chunk_fields,
+                files=chunk_files,
+                headers={"X-API-Key": api_key},
+            )
+            uploaded += len(chunk_files)
+            print(
+                f"✓ Uploaded batch chunk {chunk_idx + 1}/{total_chunks} "
+                f"({len(chunk_files)} files, total {uploaded}/{len(all_files)})"
+            )
         print(f"✓ Uploaded {len(all_files)} protobuf batch files")
         return True
     except Exception as e:
@@ -443,7 +465,7 @@ def run_scan2(
     if effective_backend:
         os.environ["GRAPHOPS_INTERFACE_BACKEND_URL"] = f"{str(effective_backend).rstrip('/')}/api/v1"
         if not backend_url:
-            print(f"   Backend: {effective_backend} (from config/env)")
+            print(f"   Backend: {effective_backend}")
 
     existing_nodes = _load_existing_graph_items(out_path)
     can_incremental = (
