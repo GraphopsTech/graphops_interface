@@ -1,4 +1,4 @@
-"""Full scan: Run ruby_base on entire project. No incremental logic - always scans everything."""
+"""Scan: run ruby_base on the entire project."""
 
 import resource
 import sys
@@ -122,8 +122,9 @@ def run_full_scan(
     no_upload: bool = False,
 ) -> None:
     """
-    Full scan of Ruby project via ruby_base.
-    Always scans the entire project. No incremental/git logic.
+    Scan a Ruby project via ruby_base.
+
+    This command always scans the entire project. No incremental/git logic.
     """
     import hashlib
     import os
@@ -179,7 +180,7 @@ def run_full_scan(
         if not backend_url:
             print(f"   Backend: {effective_backend}")
 
-    print(f"📦 graphops full_scan (ruby_base)")
+    print(f"📦 graphops scan (ruby_base)")
     print(f"   Root:    {scan_path}")
     print(f"   Rules:  {rules_path or '(bundled)'}")
     print(f"   Exclude: {excluded_paths}")

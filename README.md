@@ -1,10 +1,54 @@
 # graphops_interface
 
-Backend communication for Graph Ops: init, encryption, API client, and output to `nodes.json`. Grammar packages (e.g. `ruby_grammars`, `python_grammars`) plug in for language-specific scanning.
+`graphops_interface` is the open-source command-line package that connects a local
+scan to the Graphops backend. It handles project initialization, backend
+configuration, encryption-key retrieval, scan orchestration, and upload of the
+generated metadata batches.
 
-## Install
+This package is open source and released under the MIT License.
 
-**`graphops_interface` is not on the public PyPI index** — it is served from your **Graph Ops** app’s private PEP 503 API (same host as your Rails API, e.g. `https://api.graphops.tech/pypi/simple/`). You must tell pip about that index:
+## What This Package Does
+
+`graphops_interface` is responsible for:
+
+- creating local project configuration with `graphops init`
+- reading `graphops.yml` and `.env.graphops`
+- resolving the backend origin used for rule downloads and uploads
+- invoking `ruby_base` for Ruby Phase 1 and Phase 2 scanning
+- uploading protobuf batch files to the Graphops backend
+
+It does **not** parse Ruby itself. Ruby parsing and rule-driven extraction live in
+the companion package `ruby_base`.
+
+## Open Source Packages
+
+Graphops currently publishes two open-source packages:
+
+- [`graphops_interface`](https://github.com/GraphopsTech/graphops_interface)
+- [`ruby_base`](https://github.com/GraphopsTech/ruby_base)
+
+## Installation
+
+### Editable install for local development
+
+From the monorepo root:
+
+```bash
+pip install -e ./ruby_base
+pip install -e ./graphops_interface
+```
+
+Or install `graphops_interface` with the Ruby extra when `ruby_base` is available
+from your package index:
+
+```bash
+pip install "graphops_interface[ruby]"
+```
+
+### Install from your private Graphops package index
+
+`graphops_interface` is not published on the public PyPI index. It is served from
+the same Graphops host that serves the Rails API.
 
 ```bash
 pip install graphops_interface \
@@ -12,76 +56,189 @@ pip install graphops_interface \
   --trusted-host api.graphops.tech
 ```
 
-Or set `PIP_EXTRA_INDEX_URL` / `PIP_TRUSTED_HOST`, or configure `[global] extra-index-url` in `pip.conf` (see `ruby_base` README for examples).
-
-Optional grammar packages (if published separately):
+You can also set these once per environment:
 
 ```bash
-pip install ruby_grammars
+export PIP_EXTRA_INDEX_URL="https://YOUR_TOKEN:@api.graphops.tech/pypi/simple/"
+export PIP_TRUSTED_HOST="api.graphops.tech"
 ```
 
-CLI:
+### Requirements
+
+- Python 3.10+
+- access to your Graphops backend
+- `ruby_base` for Ruby scanning
+
+## CLI Overview
+
+Install exposes the `graphops` command:
 
 ```bash
 graphops --help
 ```
 
-## Multi-project config
+Public commands:
 
-Config supports **multiple projects**. Each project has: `root_path`, `external_uuid`, `api_key`, `encryption_key`, and `language`. Init stores `api_token` and a global `encryption_key`.
+- `graphops init`
+- `graphops scan`
 
-- Config file: `~/.graphops_interface/config.json`
-- One project can be set as **default** for `scan` when `--project` is omitted.
+## Quick Start
 
-## Commands
-
-| Command | Description |
-|---------|-------------|
-| `graphops init` | Store API token + encryption key (no activation/root path). |
-| `graphops scan [--project P] [--language L] [--path PATH]` | Scan and write `nodes.json` (+ upload). |
-| `graphops scan2 [--path P] [--rules-dir R] [--exclude D...] [--output O]` | Ruby scan via ruby_base (Phase 1 + Phase 2). Writes `output/nodes.json`. |
-| `graphops projects` | List projects and show which is default. |
-| `graphops use PROJECT` | Set the default project. |
-
-### graphops scan2
-
-Uses `ruby_base` to run Phase 1 (type dictionary) and Phase 2 (metadata extraction) in one command.
+### 1. Initialize a project
 
 ```bash
-# From project root (requires graphops.yml with root_path)
-graphops scan2
-
-# Or with explicit path and rules
-graphops scan2 --path backend --rules-dir backend/rules
-
-# Exclude dirs, custom output
-graphops scan2 --path backend -r backend/rules --exclude tmp --exclude vendor -o output/nodes.json
+graphops init --api-key YOUR_API_KEY --root-path backend
 ```
 
-Requires `ruby_base`. For local development:
+For local development against a local backend:
+
 ```bash
-pip install -e ./ruby_base
-pip install -e ./graphops_interface
-# or: pip install -e '.[ruby]'  (if ruby_base is published)
+graphops init --api-key YOUR_API_KEY --root-path backend --dev
 ```
 
-## Grammar plugins (entry points)
+This writes:
 
-Register under the `graphops_interface.grammars` entry point:
+- `graphops.yml`
+- `.env.graphops`
 
-```ini
-[project.entry-points."graphops_interface.grammars"]
-ruby = "ruby_grammars:get_analyzer"
+### 2. Run a scan
+
+```bash
+graphops scan
 ```
 
-## Config and env
+Or with explicit options:
 
-- Config: `~/.graphops_interface/config.json`
-- Backend URL: `GRAPHOPS_INTERFACE_BACKEND_URL`, or `AGENT_INTERFACE_BACKEND_URL` / `GRAPH_OPS_AGENT_BACKEND_URL` / `RUBY_AGENT_BACKEND_URL` (fallback), default `https://api.graphops.tech/api/v1`.
-- `graphops init --dev` writes `backend_url: "http://localhost:3000"` to `graphops.yml` (local mode).
-- `graphops init` (without `--dev`) writes `backend_url: "https://api.graphops.tech"` (production mode).
-- `scan`, `scan2`, and `full_scan` read `backend_url` from `graphops.yml` and route requests there unless explicitly overridden by env/flags.
-- Large upload tuning:
-  - `GRAPHOPS_UPLOAD_TIMEOUT_SECONDS` (default: `300`)
-  - `GRAPHOPS_UPLOAD_BATCH_FILES_PER_REQUEST` (default: `10`)
-  These apply to protobuf batch uploads in `scan2` / `full_scan`.
+```bash
+graphops scan --path backend --rules-dir backend/rules
+graphops scan --path backend -r backend/rules --exclude tmp --exclude vendor -o output/nodes.pb
+```
+
+## Command Reference
+
+### `graphops init`
+
+Initializes a project for scanning.
+
+What it does:
+
+- validates the provided API key with the backend
+- receives a project UUID
+- writes `graphops.yml`
+- writes `.env.graphops`
+
+Important flags:
+
+- `--api-key`, `-k`
+- `--root-path`, `-r`
+- `--dev`
+
+Generated `graphops.yml` contains:
+
+- `uuid`
+- `root_path`
+- `language`
+- `excluded_paths`
+- `backend_url`
+
+### `graphops scan`
+
+Runs the Ruby scan flow using `ruby_base`.
+
+What it does:
+
+1. reads `graphops.yml`
+2. resolves the scan root and backend origin
+3. runs Phase 1 dictionary generation
+4. runs Phase 2 metadata extraction
+5. writes protobuf batches locally
+6. uploads the batches unless `--no-upload` is set
+
+Supported flags:
+
+- `--path`, `-p`
+- `--rules-dir`, `-r`
+- `--exclude`
+- `--output`, `-o`
+- `--backend-url`, `-b`
+- `--validate-ids`
+- `--no-upload`
+
+## Output
+
+By default, `graphops scan` writes protobuf+gzip batches under an output directory
+derived from the provided output path.
+
+Typical output files:
+
+- `output/dictionary.json` from Phase 1
+- `output/nodes_batches/*.pb.gz`
+- `output/namespaces_batches/*.pb.gz`
+- a manifest describing the generated batches
+
+## Package Structure
+
+Main modules in `graphops_interface`:
+
+- `graphops_interface.cli` - CLI entrypoints and command routing
+- `graphops_interface.api` - backend HTTP client
+- `graphops_interface.core` - config helpers
+- `graphops_interface.utils.encryption` - payload encryption helpers
+- `graphops_interface.utils.git` - git helpers used by internal tooling
+- `graphops_interface.grammar_registry` - grammar/analyzer registration
+
+## Configuration
+
+### Project files
+
+- `graphops.yml` - project-level scan configuration
+- `.env.graphops` - stores `GRAPHOPS_API_KEY`
+
+### Environment variables
+
+- `GRAPHOPS_INTERFACE_BACKEND_URL`
+- `AGENT_INTERFACE_BACKEND_URL`
+- `GRAPH_OPS_AGENT_BACKEND_URL`
+- `RUBY_AGENT_BACKEND_URL`
+
+Fallback default:
+
+- `https://api.graphops.tech/api/v1`
+
+### Upload tuning
+
+- `GRAPHOPS_UPLOAD_TIMEOUT_SECONDS` default: `300`
+- `GRAPHOPS_UPLOAD_BATCH_FILES_PER_REQUEST` default: `10`
+
+## Relationship to `ruby_base`
+
+`graphops_interface` orchestrates the scan.
+`ruby_base` performs the Ruby analysis.
+
+In practice:
+
+- `graphops_interface` handles init, config, backend URL resolution, and upload
+- `ruby_base` handles dictionary building, rule loading, AST extraction, and
+  protobuf batch generation
+
+See the companion package:
+
+- [`ruby_base`](https://github.com/GraphopsTech/ruby_base)
+
+## Building and Publishing
+
+Build a wheel locally:
+
+```bash
+pip install build
+python -m build
+ls -la dist/
+```
+
+Then upload the generated distribution to your private Graphops package index.
+
+## License
+
+This package is licensed under the MIT License.
+
+See [`LICENSE`](./LICENSE) for the full license text.
